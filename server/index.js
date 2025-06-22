@@ -79,16 +79,16 @@ io.on('connection', (socket) => {
 // Make io accessible to routes
 app.set('io', io);
 
-// API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/patients', patientRoutes);
-app.use('/api/appointments', appointmentRoutes);
-app.use('/api/prescriptions', prescriptionRoutes);
-app.use('/api/supplies', supplyRoutes);
+// API routes - Vercel will handle the /api prefix
+app.use('/auth', authRoutes);
+app.use('/users', userRoutes);
+app.use('/patients', patientRoutes);
+app.use('/appointments', appointmentRoutes);
+app.use('/prescriptions', prescriptionRoutes);
+app.use('/supplies', supplyRoutes);
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
