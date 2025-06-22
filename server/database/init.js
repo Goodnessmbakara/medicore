@@ -5,24 +5,18 @@ dotenv.config();
 
 const { Pool } = pg;
 
-// For WebContainer environment, we'll use a mock database setup
-// since PostgreSQL isn't available in the browser environment
-const isWebContainer = process.env.NODE_ENV !== 'production';
+// Use real database if DATABASE_URL is provided, otherwise use mock data
+const useRealDatabase = !!process.env.DATABASE_URL;
 
-let pool;
-
-if (isWebContainer) {
-  // Mock database for WebContainer environment
-  console.log('🔧 Running in WebContainer - using mock database');
-  
-  // Mock user data with hashed passwords and PINs
-  const mockUsers = [
+// Mock database for development/testing
+const mockDatabase = {
+  users: [
     {
       id: 1,
       username: 'admin',
       email: 'admin@medicore.com',
-      password_hash: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // admin123
-      pin_hash: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // 1234
+      password_hash: '$2a$10$mock.hash.admin',
+      pin_hash: '$2a$10$mock.pin.1234',
       role: 'admin',
       full_name: 'System Administrator',
       is_active: true,
@@ -32,8 +26,8 @@ if (isWebContainer) {
       id: 2,
       username: 'doctor1',
       email: 'doctor1@medicore.com',
-      password_hash: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // doctor123
-      pin_hash: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // 2345
+      password_hash: '$2a$10$mock.hash.doctor',
+      pin_hash: '$2a$10$mock.pin.2345',
       role: 'doctor',
       full_name: 'Dr. John Smith',
       is_active: true,
@@ -43,8 +37,8 @@ if (isWebContainer) {
       id: 3,
       username: 'nurse1',
       email: 'nurse1@medicore.com',
-      password_hash: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // nurse123
-      pin_hash: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // 3456
+      password_hash: '$2a$10$mock.hash.nurse',
+      pin_hash: '$2a$10$mock.pin.3456',
       role: 'nurse',
       full_name: 'Sarah Johnson',
       is_active: true,
@@ -54,197 +48,172 @@ if (isWebContainer) {
       id: 4,
       username: 'pharmacist1',
       email: 'pharmacist1@medicore.com',
-      password_hash: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // pharmacy123
-      pin_hash: '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // 4567
+      password_hash: '$2a$10$mock.hash.pharmacist',
+      pin_hash: '$2a$10$mock.pin.4567',
       role: 'pharmacist',
       full_name: 'Michael Brown',
       is_active: true,
       created_at: new Date().toISOString()
+    },
+    {
+      id: 5,
+      username: 'patient1',
+      email: 'patient1@medicore.com',
+      password_hash: '$2a$10$mock.hash.patient',
+      pin_hash: '$2a$10$mock.pin.5678',
+      role: 'patient',
+      full_name: 'John Patient',
+      is_active: true,
+      created_at: new Date().toISOString()
     }
-  ];
-
-  const mockPatients = [
+  ],
+  patients: [
     {
       id: 1,
       user_id: 5,
-      patient_id: 'P000001',
-      age: 35,
-      weight: 70.5,
+      patient_id: 'P001',
+      date_of_birth: '1990-05-15',
+      gender: 'Male',
+      blood_type: 'O+',
+      emergency_contact: 'Jane Patient',
+      emergency_phone: '+1234567890',
+      address: '123 Health St, Medical City, MC 12345',
+      insurance_provider: 'HealthCare Plus',
+      insurance_number: 'HC123456789',
       allergies: 'Penicillin',
-      blood_pressure: '120/80',
-      temperature: 36.5,
-      emergency_contact: 'Jane Doe - 555-0123',
+      medical_history: 'Hypertension, controlled with medication',
       created_at: new Date().toISOString()
     }
-  ];
-
-  const mockSupplies = [
+  ],
+  appointments: [
     {
       id: 1,
-      drug_name: 'Paracetamol',
-      quantity: 150,
-      batch_id: 'PAR001',
-      expiry_date: '2025-12-31',
-      unit_price: 0.50,
-      supplier: 'PharmaCorp',
-      updated_at: new Date().toISOString(),
-      updated_by: 4
-    },
+      patient_id: 1,
+      doctor_id: 2,
+      appointment_date: new Date(Date.now() + 86400000).toISOString(),
+      appointment_time: '10:00:00',
+      status: 'scheduled',
+      reason: 'Annual checkup',
+      notes: 'Patient requested morning appointment',
+      created_at: new Date().toISOString()
+    }
+  ],
+  prescriptions: [
     {
-      id: 2,
-      drug_name: 'Ibuprofen',
-      quantity: 25,
-      batch_id: 'IBU002',
-      expiry_date: '2025-06-30',
-      unit_price: 0.75,
-      supplier: 'MediSupply',
-      updated_at: new Date().toISOString(),
-      updated_by: 4
+      id: 1,
+      patient_id: 1,
+      doctor_id: 2,
+      medication_name: 'Ibuprofen',
+      dosage: '400mg',
+      frequency: 'Every 6 hours as needed',
+      duration: '7 days',
+      status: 'pending',
+      notes: 'For pain relief',
+      action: 'PRESCRIPTION_CREATED',
+      created_at: new Date().toISOString()
     }
-  ];
-
-  // Create a mock pool that simulates database operations
-  pool = {
-    query: async (sql, params = []) => {
-      console.log('Mock DB Query:', sql.substring(0, 100) + '...');
-      
-      // Return mock responses for different query types
-      if (sql.includes('CREATE TABLE') || sql.includes('CREATE INDEX') || sql.includes('ALTER TABLE')) {
-        return { rows: [], rowCount: 0 };
-      }
-      
-      // User authentication queries
-      if (sql.includes('SELECT * FROM users WHERE username')) {
-        const username = params[0];
-        const user = mockUsers.find(u => u.username === username);
-        return {
-          rows: user ? [user] : [],
-          rowCount: user ? 1 : 0
-        };
-      }
-
-      // User validation queries
-      if (sql.includes('SELECT id, username, email, role, full_name, is_active FROM users WHERE id')) {
-        const userId = params[0];
-        const user = mockUsers.find(u => u.id === userId);
-        if (user) {
-          const { password_hash, pin_hash, ...userWithoutHashes } = user;
-          return {
-            rows: [userWithoutHashes],
-            rowCount: 1
-          };
-        }
-        return { rows: [], rowCount: 0 };
-      }
-
-      // User stats queries
-      if (sql.includes('SELECT') && sql.includes('role') && sql.includes('COUNT(*)')) {
-        return {
-          rows: [
-            { role: 'admin', count: '1', active_count: '1' },
-            { role: 'doctor', count: '1', active_count: '1' },
-            { role: 'nurse', count: '1', active_count: '1' },
-            { role: 'pharmacist', count: '1', active_count: '1' },
-            { role: 'patient', count: '0', active_count: '0' }
-          ],
-          rowCount: 5
-        };
-      }
-
-      // Doctor logs queries
-      if (sql.includes('audit_logs') && sql.includes('doctor')) {
-        return {
-          rows: [
-            {
-              full_name: 'Dr. John Smith',
-              action: 'PRESCRIPTION_CREATED',
-              created_at: new Date().toISOString()
-            }
-          ],
-          rowCount: 1
-        };
-      }
-
-      // Patients queries
-      if (sql.includes('SELECT p.*, u.full_name') && sql.includes('patients p')) {
-        return {
-          rows: mockPatients.map(p => ({
-            ...p,
-            full_name: 'John Patient',
-            email: 'patient@example.com',
-            last_visit: new Date().toISOString()
-          })),
-          rowCount: mockPatients.length
-        };
-      }
-
-      // Supplies queries
-      if (sql.includes('SELECT s.*, u.full_name as updated_by_name FROM supplies')) {
-        return {
-          rows: mockSupplies.map(s => ({
-            ...s,
-            updated_by_name: 'Michael Brown'
-          })),
-          rowCount: mockSupplies.length
-        };
-      }
-
-      // Appointments queries
-      if (sql.includes('appointments')) {
-        return { rows: [], rowCount: 0 };
-      }
-
-      // Prescriptions queries
-      if (sql.includes('prescriptions')) {
-        return { rows: [], rowCount: 0 };
-      }
-
-      // Insert queries
-      if (sql.includes('INSERT INTO')) {
-        return {
-          rows: [{ id: Math.floor(Math.random() * 1000) + 1 }],
-          rowCount: 1
-        };
-      }
-
-      // Update queries
-      if (sql.includes('UPDATE')) {
-        return { rows: [], rowCount: 1 };
-      }
-
-      // Audit log inserts
-      if (sql.includes('audit_logs')) {
-        return { rows: [], rowCount: 1 };
-      }
-      
-      return { rows: [], rowCount: 0 };
-    },
-    end: async () => {
-      console.log('Mock database connection closed');
+  ],
+  supplies: [
+    {
+      id: 1,
+      medication_name: 'Ibuprofen',
+      quantity: 500,
+      unit: 'tablets',
+      expiry_date: '2025-12-31',
+      supplier: 'PharmaCorp',
+      cost_per_unit: 0.25,
+      reorder_level: 100,
+      created_at: new Date().toISOString()
     }
-  };
-} else {
-  // Real PostgreSQL connection for production
-  pool = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://localhost:5432/medicore',
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-  });
-}
+  ],
+  medical_records: [
+    {
+      id: 1,
+      patient_id: 1,
+      doctor_id: 2,
+      record_type: 'consultation',
+      symptoms: 'Headache, fever',
+      pain_scale: 5,
+      notes: 'Patient reports mild headache and low-grade fever',
+      created_at: new Date().toISOString()
+    }
+  ],
+  audit_logs: [
+    {
+      id: 1,
+      user_id: 2,
+      action: 'PRESCRIPTION_CREATED',
+      entity_type: 'prescription',
+      entity_id: 1,
+      details: JSON.stringify({ medication: 'Ibuprofen', patient_id: 1 }),
+      ip_address: '127.0.0.1',
+      user_agent: 'Mozilla/5.0 (Demo)',
+      created_at: new Date().toISOString()
+    }
+  ]
+};
 
-// Database schema initialization
+// Mock query function for development
+const mockQuery = async (sql, params = []) => {
+  console.log('Mock query:', sql, params);
+  
+  // Simple mock query handling
+  if (sql.includes('SELECT id, username, email, role, full_name, is_active FROM users WHERE id')) {
+    const userId = params[0];
+    const user = mockDatabase.users.find(u => u.id === userId);
+    return { rows: user ? [user] : [] };
+  }
+  
+  if (sql.includes('SELECT * FROM users')) {
+    return { rows: mockDatabase.users };
+  }
+  
+  if (sql.includes('SELECT * FROM patients')) {
+    return { rows: mockDatabase.patients };
+  }
+  
+  if (sql.includes('SELECT * FROM appointments')) {
+    return { rows: mockDatabase.appointments };
+  }
+  
+  if (sql.includes('SELECT * FROM prescriptions')) {
+    return { rows: mockDatabase.prescriptions };
+  }
+  
+  if (sql.includes('SELECT * FROM supplies')) {
+    return { rows: mockDatabase.supplies };
+  }
+  
+  if (sql.includes('SELECT * FROM medical_records')) {
+    return { rows: mockDatabase.medical_records };
+  }
+  
+  if (sql.includes('SELECT * FROM audit_logs')) {
+    return { rows: mockDatabase.audit_logs };
+  }
+  
+  // Default empty result
+  return { rows: [] };
+};
+
+// Real PostgreSQL pool for production
+const pool = useRealDatabase ? new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+}) : null;
+
+// Initialize database tables
 const initializeDatabase = async () => {
-  try {
-    if (isWebContainer) {
-      console.log('✅ Mock database initialized for WebContainer environment');
-      console.log('📋 Demo credentials available:');
-      console.log('   Admin: admin / admin123 / PIN: 1234');
-      console.log('   Doctor: doctor1 / doctor123 / PIN: 2345');
-      console.log('   Nurse: nurse1 / nurse123 / PIN: 3456');
-      console.log('   Pharmacist: pharmacist1 / pharmacy123 / PIN: 4567');
-      return;
-    }
+  if (!useRealDatabase) {
+    console.log('🔧 Running in development - using mock database');
+    return;
+  }
 
-    // Create tables
+  try {
+    console.log('🗄️ Initializing PostgreSQL database...');
+    console.log('📊 Database URL:', process.env.DATABASE_URL?.substring(0, 50) + '...');
+    
+    // Create users table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -254,106 +223,93 @@ const initializeDatabase = async () => {
         pin_hash VARCHAR(255) NOT NULL,
         role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'doctor', 'nurse', 'pharmacist', 'patient')),
         full_name VARCHAR(100) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        is_active BOOLEAN DEFAULT true
-      );
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
 
+    // Create patients table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS patients (
         id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id),
         patient_id VARCHAR(20) UNIQUE NOT NULL,
-        age INTEGER,
-        weight DECIMAL(5,2),
-        allergies TEXT,
-        blood_pressure VARCHAR(20),
-        temperature DECIMAL(4,1),
+        date_of_birth DATE,
+        gender VARCHAR(10),
+        blood_type VARCHAR(5),
         emergency_contact VARCHAR(100),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+        emergency_phone VARCHAR(20),
+        address TEXT,
+        insurance_provider VARCHAR(100),
+        insurance_number VARCHAR(50),
+        allergies TEXT,
+        medical_history TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
 
+    // Create appointments table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS appointments (
         id SERIAL PRIMARY KEY,
-        patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
-        doctor_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        appointment_date TIMESTAMP NOT NULL,
-        status VARCHAR(20) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled', 'no-show')),
-        notes TEXT,
-        urgency VARCHAR(10) DEFAULT 'low' CHECK (urgency IN ('low', 'moderate', 'high')),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS medical_records (
-        id SERIAL PRIMARY KEY,
-        patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
+        patient_id INTEGER REFERENCES patients(id),
         doctor_id INTEGER REFERENCES users(id),
-        nurse_id INTEGER REFERENCES users(id),
-        record_type VARCHAR(50) NOT NULL,
-        diagnosis TEXT,
-        symptoms TEXT,
-        pain_scale INTEGER CHECK (pain_scale >= 0 AND pain_scale <= 10),
+        appointment_date DATE NOT NULL,
+        appointment_time TIME NOT NULL,
+        status VARCHAR(20) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in-progress', 'completed', 'cancelled')),
+        reason TEXT,
         notes TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
 
+    // Create prescriptions table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS prescriptions (
         id SERIAL PRIMARY KEY,
-        patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
-        doctor_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        pharmacist_id INTEGER REFERENCES users(id),
-        drug_name VARCHAR(100) NOT NULL,
-        dosage VARCHAR(100) NOT NULL,
-        instructions TEXT,
+        patient_id INTEGER REFERENCES patients(id),
+        doctor_id INTEGER REFERENCES users(id),
+        medication_name VARCHAR(100) NOT NULL,
+        dosage VARCHAR(50) NOT NULL,
+        frequency VARCHAR(100) NOT NULL,
+        duration VARCHAR(50) NOT NULL,
         status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'verified', 'dispensed', 'cancelled')),
-        quantity INTEGER NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        verified_at TIMESTAMP,
-        dispensed_at TIMESTAMP
-      );
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
 
+    // Create supplies table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS supplies (
         id SERIAL PRIMARY KEY,
-        drug_name VARCHAR(100) NOT NULL,
-        quantity INTEGER NOT NULL DEFAULT 0,
-        batch_id VARCHAR(50),
-        expiry_date DATE,
-        unit_price DECIMAL(10,2),
+        medication_name VARCHAR(100) NOT NULL,
+        quantity INTEGER NOT NULL,
+        unit VARCHAR(20) NOT NULL,
+        expiry_date DATE NOT NULL,
         supplier VARCHAR(100),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_by INTEGER REFERENCES users(id)
-      );
+        cost_per_unit DECIMAL(10,2),
+        reorder_level INTEGER DEFAULT 10,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
 
+    // Create medical_records table
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS doctor_requests (
+      CREATE TABLE IF NOT EXISTS medical_records (
         id SERIAL PRIMARY KEY,
-        patient_id INTEGER REFERENCES patients(id) ON DELETE CASCADE,
-        nurse_id INTEGER REFERENCES users(id),
+        patient_id INTEGER REFERENCES patients(id),
         doctor_id INTEGER REFERENCES users(id),
-        request_type VARCHAR(50) NOT NULL,
-        reason TEXT NOT NULL,
-        preferred_date TIMESTAMP,
-        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined', 'completed')),
-        response_notes TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+        nurse_id INTEGER REFERENCES users(id),
+        record_type VARCHAR(50) NOT NULL,
+        symptoms TEXT,
+        pain_scale INTEGER CHECK (pain_scale >= 0 AND pain_scale <= 10),
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
 
+    // Create audit_logs table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS audit_logs (
         id SERIAL PRIMARY KEY,
@@ -365,24 +321,66 @@ const initializeDatabase = async () => {
         ip_address INET,
         user_agent TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+      )
     `);
 
-    // Create indexes for better performance
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
-      CREATE INDEX IF NOT EXISTS idx_patients_patient_id ON patients(patient_id);
-      CREATE INDEX IF NOT EXISTS idx_appointments_patient_doctor ON appointments(patient_id, doctor_id);
-      CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date);
-      CREATE INDEX IF NOT EXISTS idx_prescriptions_status ON prescriptions(status);
-      CREATE INDEX IF NOT EXISTS idx_audit_logs_user_action ON audit_logs(user_id, action);
-    `);
+    // Insert demo data if tables are empty
+    const userCount = await pool.query('SELECT COUNT(*) FROM users');
+    if (parseInt(userCount.rows[0].count) === 0) {
+      console.log('📝 Inserting demo data...');
+      
+      // Insert demo users
+      const bcrypt = await import('bcryptjs');
+      const adminPassword = await bcrypt.hash('admin123', 10);
+      const adminPin = await bcrypt.hash('1234', 10);
+      
+      await pool.query(`
+        INSERT INTO users (username, email, password_hash, pin_hash, role, full_name)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, ['admin', 'admin@medicore.com', adminPassword, adminPin, 'admin', 'System Administrator']);
+      
+      const doctorPassword = await bcrypt.hash('doctor123', 10);
+      const doctorPin = await bcrypt.hash('2345', 10);
+      
+      await pool.query(`
+        INSERT INTO users (username, email, password_hash, pin_hash, role, full_name)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, ['doctor1', 'doctor1@medicore.com', doctorPassword, doctorPin, 'doctor', 'Dr. John Smith']);
+      
+      const nursePassword = await bcrypt.hash('nurse123', 10);
+      const nursePin = await bcrypt.hash('3456', 10);
+      
+      await pool.query(`
+        INSERT INTO users (username, email, password_hash, pin_hash, role, full_name)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, ['nurse1', 'nurse1@medicore.com', nursePassword, nursePin, 'nurse', 'Sarah Johnson']);
+      
+      const pharmacistPassword = await bcrypt.hash('pharmacy123', 10);
+      const pharmacistPin = await bcrypt.hash('4567', 10);
+      
+      await pool.query(`
+        INSERT INTO users (username, email, password_hash, pin_hash, role, full_name)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, ['pharmacist1', 'pharmacist1@medicore.com', pharmacistPassword, pharmacistPin, 'pharmacist', 'Michael Brown']);
+      
+      const patientPassword = await bcrypt.hash('patient123', 10);
+      const patientPin = await bcrypt.hash('5678', 10);
+      
+      await pool.query(`
+        INSERT INTO users (username, email, password_hash, pin_hash, role, full_name)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, ['patient1', 'patient1@medicore.com', patientPassword, patientPin, 'patient', 'John Patient']);
+      
+      console.log('✅ Demo data inserted successfully');
+    }
 
-    console.log('✅ Database initialized successfully');
+    console.log('✅ PostgreSQL database initialized successfully');
   } catch (error) {
-    console.error('❌ Error initializing database:', error);
+    console.error('❌ Database initialization failed:', error);
     throw error;
   }
 };
 
+// Export the appropriate query function
+export const query = useRealDatabase ? pool.query.bind(pool) : mockQuery;
 export { pool, initializeDatabase };

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { authAPI } from '../services/api';
 
 interface User {
   id: number;
@@ -27,7 +28,7 @@ export const useAuth = () => {
   return context;
 };
 
-// Demo credentials for frontend-only deployment
+// Demo credentials for fallback
 const demoCredentials = {
   admin: { 
     password: 'admin123', 
@@ -89,7 +90,7 @@ const demoCredentials = {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('demo_token'));
+  const [token, setToken] = useState<string | null>(localStorage.getItem('auth_token') || localStorage.getItem('demo_token'));
 
   // Validate token on app load
   useEffect(() => {
@@ -100,23 +101,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       try {
-        // For demo purposes, decode the "token" which is just the username
-        const username = atob(token);
-        const demoUser = Object.values(demoCredentials).find(cred => cred.user.username === username);
+        // Try to validate with real API first
+        const response = await authAPI.validate();
+        setUser(response.user);
+        console.log('User authenticated via API:', response.user);
+      } catch (error) {
+        console.log('API validation failed, trying demo token...');
         
-        if (demoUser) {
-          setUser(demoUser.user);
-          console.log('User authenticated:', demoUser.user);
-        } else {
+        // Fallback to demo token validation
+        try {
+          const username = atob(token);
+          const demoUser = Object.values(demoCredentials).find(cred => cred.user.username === username);
+          
+          if (demoUser) {
+            setUser(demoUser.user);
+            console.log('User authenticated via demo:', demoUser.user);
+          } else {
+            localStorage.removeItem('demo_token');
+            localStorage.removeItem('auth_token');
+            setToken(null);
+            setUser(null);
+          }
+        } catch (demoError) {
+          console.error('Demo token validation failed:', demoError);
           localStorage.removeItem('demo_token');
+          localStorage.removeItem('auth_token');
           setToken(null);
           setUser(null);
         }
-      } catch (error) {
-        console.error('Token validation failed:', error);
-        localStorage.removeItem('demo_token');
-        setToken(null);
-        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -127,13 +139,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (username: string, password: string, pin: string): Promise<boolean> => {
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-
+      // Try real API login first
+      const response = await authAPI.login(username, password, pin);
+      
+      localStorage.setItem('auth_token', response.token);
+      localStorage.removeItem('demo_token'); // Clear any demo token
+      setToken(response.token);
+      setUser(response.user);
+      
+      toast.success(`Welcome back, ${response.user.fullName}!`);
+      console.log('Login successful via API:', response.user);
+      
+      return true;
+    } catch (error: any) {
+      console.log('API login failed, trying demo credentials...');
+      
+      // Fallback to demo credentials
       const demoUser = demoCredentials[username as keyof typeof demoCredentials];
       
       if (!demoUser || demoUser.password !== password || demoUser.pin !== pin) {
-        toast.error('Invalid credentials. Please check the demo credentials in the login modal.');
+        toast.error('Invalid credentials. Please check your username, password, and PIN.');
         return false;
       }
 
@@ -141,24 +166,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const demoToken = btoa(username);
       
       localStorage.setItem('demo_token', demoToken);
+      localStorage.removeItem('auth_token'); // Clear any real token
       setToken(demoToken);
       setUser(demoUser.user);
       
-      toast.success(`Welcome back, ${demoUser.user.fullName}!`);
-      
-      // Force a small delay to ensure state updates
-      setTimeout(() => {
-        console.log('Login successful, user set:', demoUser.user);
-      }, 100);
+      toast.success(`Welcome back, ${demoUser.user.fullName}! (Demo Mode)`);
+      console.log('Login successful via demo:', demoUser.user);
       
       return true;
-    } catch (error: any) {
-      toast.error('Login failed. Please try again.');
-      return false;
     }
   };
 
   const logout = () => {
+    localStorage.removeItem('auth_token');
     localStorage.removeItem('demo_token');
     setToken(null);
     setUser(null);
