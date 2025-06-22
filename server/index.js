@@ -103,9 +103,12 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3001;
 
-server.listen(PORT, () => {
-  console.log(`🏥 MediCore server running on port ${PORT}`);
-  console.log(`🚀 WebSocket server ready for real-time notifications`);
-});
+// This part is for local development, Vercel will ignore it.
+if (process.env.NODE_ENV === 'development') {
+  server.listen(PORT, () => {
+    console.log(`🏥 MediCore server running on port ${PORT}`);
+    console.log(`🚀 WebSocket server ready for real-time notifications`);
+  });
+}
 
-export { io };
+export default server;
