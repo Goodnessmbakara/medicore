@@ -378,8 +378,9 @@ const initializeDatabase = async () => {
 
     console.log('✅ PostgreSQL database initialized successfully');
   } catch (error) {
-    console.error('❌ Database initialization failed:', error);
-    throw error;
+    console.error('❌ Database initialization failed. The application will not start.');
+    console.error(error); // Log the full error for Vercel logs
+    throw new Error('Database initialization failed.'); // Throw a new error to stop the deployment
   }
 };
 
