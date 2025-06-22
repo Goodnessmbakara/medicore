@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import toast from "react-hot-toast";
-import { api, setAuthToken } from "../services/api";
+import api from "../services/api";
+
+const setAuthToken = (token) => {
+  if (token) {
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common["Authorization"];
+  }
+};
 
 interface User {
   id: number;
