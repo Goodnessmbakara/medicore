@@ -199,7 +199,9 @@ const mockQuery = async (sql, params = []) => {
 // Real PostgreSQL pool for production
 const pool = useRealDatabase ? new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: {
+    rejectUnauthorized: false,
+  },
 }) : null;
 
 // Initialize database tables
